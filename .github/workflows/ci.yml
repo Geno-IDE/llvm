@@ -1,0 +1,220 @@
+name: CI
+
+on:
+  schedule:
+    # 3:00 on Mondays
+  - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  update_llvm:
+    name: Update LLVM
+    runs-on: [self-hosted, windows]
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: Get Date
+      id: date
+      run: echo "::set-output name=date::$(Get-Date -Format "yyyy-MM-dd")"
+    - name: Update Submodule
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git submodule foreach "(git checkout main; git pull)"
+        git add llvm-project
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Actions"
+        git commit -m "Latest llvm as of ${{ steps.date.outputs.date }}"
+        git push origin master
+
+  windows_debug:
+    name: Windows Debug
+    runs-on: [self-hosted, windows]
+    needs: update_llvm
+    concurrency:
+      group: windows-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Visual Studio 16" -A x64 -Thost=x64 -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON -DLLVM_USE_CRT_DEBUG=MT
+        cmake --build build --config Debug --parallel 4
+      # Archive all .lib files
+    - name: Archive
+      working-directory: build/Debug/lib
+      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -y "windows-debug.7z" "*.lib"
+      # Store archive as artifact for later (https://github.com/actions/upload-artifact)
+    - name: Store Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: windows-debug
+        path: build/Debug/lib/windows-debug.7z
+        if-no-files-found: error
+
+  windows_release:
+    name: Windows Release
+    runs-on: [self-hosted, windows]
+    needs: update_llvm
+    concurrency:
+      group: windows-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Visual Studio 16" -A x64 -Thost=x64 -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON -DLLVM_USE_CRT_RELEASE=MT
+        cmake --build build --config Release --parallel 4
+      # Archive all .lib files
+    - name: Archive
+      working-directory: build/Release/lib
+      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -y "windows-release.7z" "*.lib"
+      # Store archive as artifact for later (https://github.com/actions/upload-artifact)
+    - name: Store Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: windows-release
+        path: build/Release/lib/windows-release.7z
+        if-no-files-found: error
+
+  linux_debug:
+    name: Linux Debug
+    runs-on: [self-hosted, linux]
+    needs: update_llvm
+    concurrency:
+      group: linux-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake --build build --config Debug --parallel 4
+      # Archive all .a files and pass them through a xz filter
+    - name: Archive
+      working-directory: build/lib
+      run: tar -cJvf "linux-debug.tar.xz" *.a
+      # Store archive as artifact for later (https://github.com/actions/upload-artifact)
+    - name: Store Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: linux-debug
+        path: build/lib/linux-debug.tar.xz
+        if-no-files-found: error
+
+  linux_release:
+    name: Linux Release
+    runs-on: [self-hosted, linux]
+    needs: update_llvm
+    concurrency:
+      group: linux-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake --build build --config Release --parallel 4
+      # Archive all .a files and pass them through a xz filter
+    - name: Archive
+      working-directory: build/lib
+      run: tar -cJvf "linux-release.tar.xz" *.a
+      # Store archive as artifact for later (https://github.com/actions/upload-artifact)
+    - name: Store Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: linux-release
+        path: build/lib/linux-release.tar.xz
+        if-no-files-found: error
+
+  macos_debug:
+    name: macOS Debug
+    runs-on: [self-hosted, macos]
+    needs: update_llvm
+    concurrency:
+      group: macos-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Xcode" -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake --build build --config Debug --parallel 4
+      # Archive all .a files and pass them through a xz filter
+    - name: Archive
+      working-directory: build/Debug/lib
+      run: tar -cJvf "macos-debug.tar.xz" *.a
+      # Store archive as artifact for later (https://github.com/actions/upload-artifact)
+    - name: Store Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: macos-debug
+        path: build/Debug/lib/macos-debug.tar.xz
+        if-no-files-found: error
+
+  macos_release:
+    name: macOS Release
+    runs-on: [self-hosted, macos]
+    needs: update_llvm
+    concurrency:
+      group: macos-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Xcode" -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake --build build --config Release --parallel 4
+      # Archive all .a files and pass them through a xz filter
+    - name: Archive
+      working-directory: build/Release/lib
+      run: tar -cJvf "macos-release.tar.xz" *.a
+      # Store archive as artifact for later (https://github.com/actions/upload-artifact)
+    - name: Store Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: macos-release
+        path: build/Release/lib/macos-release.tar.xz
+        if-no-files-found: error
+
+  create_release:
+    name: Create the Release
+    runs-on: [self-hosted, windows]
+    needs: [windows_debug, windows_release, linux_debug, linux_release, macos_debug, macos_release]
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      # Download all artifacts (https://github.com/actions/download-artifact)
+    - name: Download Artifacts
+      id: download
+      uses: actions/download-artifact@v2
+      with:
+        path: artifacts
+      # Delete previous release (https://cli.github.com/manual/gh_release_delete)
+    - name: Delete Latest Release
+      continue-on-error: true
+      run: gh release delete Latest --yes --repo="Geno-IDE/llvm"
+      # Create new release (https://cli.github.com/manual/gh_release_create)
+    - name: Create Latest Release
+      working-directory: ${{ steps.download.outputs.download-path }}
+      run: gh release create Latest "windows-debug/windows-debug.7z" "windows-release/windows-release.7z" "linux-debug/linux-debug.tar.xz" "linux-release/linux-release.tar.xz" "macos-debug/macos-debug.tar.xz" "macos-release/macos-release.tar.xz" --title="Latest" --prerelease=false --draft=false --notes="" --repo="Geno-IDE/llvm"
