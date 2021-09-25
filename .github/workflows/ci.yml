@@ -1,0 +1,195 @@
+name: CI
+
+on:
+  schedule:
+    # 3:00 on Mondays
+  - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  update_llvm:
+    name: Update LLVM
+    runs-on: [self-hosted, windows]
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+    - name: Get Date
+      id: date
+      run: echo "::set-output name=date::$(Get-Date -Format "yyyy-MM-dd")"
+    - name: Update Submodule
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git submodule foreach "(git checkout main; git pull)"
+        git add llvm-project
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Actions"
+        git commit -m "Latest LLVM as of ${{ steps.date.outputs.date }}"
+        git push origin master
+
+  prepare_release:
+    name: Prepare Release
+    runs-on: [self-hosted, windows]
+    needs: update_llvm
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      # https://cli.github.com/manual/gh_release_delete
+    - name: Delete Latest Release
+      continue-on-error: true
+      run: gh release delete Latest --yes --repo="Geno-IDE/llvm"
+      # https://cli.github.com/manual/gh_release_create
+    - name: Create Latest Release
+      run: gh release create Latest --title="Latest" --prerelease=false --draft=false --notes="" --repo="Geno-IDE/llvm"
+
+  windows_debug:
+    name: Windows-Debug
+    runs-on: [self-hosted, windows]
+    needs: prepare_release
+    concurrency:
+      group: windows-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Visual Studio 16" -Thost=x64 -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON -DLLVM_USE_CRT_DEBUG=MT
+        cmake --build build --config Debug --parallel 4
+      # Archive all .lib files
+    - name: Upload Archive
+      working-directory: build/Debug/lib
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -y "Windows-Debug.7z" "*.lib"
+        gh release upload Latest "Windows-Debug.7z" --repo="Geno-IDE/llvm"
+
+  windows_release:
+    name: Windows-Release
+    runs-on: [self-hosted, windows]
+    needs: prepare_release
+    concurrency:
+      group: windows-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Visual Studio 16" -Thost=x64 -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON -DLLVM_USE_CRT_RELEASE=MT
+        cmake --build build --config Release --parallel 4
+      # Archive all .lib files
+    - name: Upload Archive
+      working-directory: build/Release/lib
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -y "Windows-Release.7z" "*.lib"
+        gh release upload Latest "Windows-Release.7z" --repo="Geno-IDE/llvm"
+
+  linux_debug:
+    name: Linux-Debug
+    runs-on: [self-hosted, linux]
+    needs: prepare_release
+    concurrency:
+      group: linux-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake --build build --config Debug --parallel 4
+      # Archive all .a files and pass them through a xz filter
+    - name: Upload Archive
+      working-directory: build/lib
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        tar -cJvf "Linux-Debug.tar.xz" *.a
+        gh release upload Latest "Linux-Debug.tar.xz" --repo="Geno-IDE/llvm"
+
+  linux_release:
+    name: Linux-Release
+    runs-on: [self-hosted, linux]
+    needs: prepare_release
+    concurrency:
+      group: linux-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake --build build --config Release --parallel 4
+      # Archive all .a files and pass them through a xz filter
+    - name: Upload Archive
+      working-directory: build/lib
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        tar -cJvf "Linux-Release.tar.xz" *.a
+        gh release upload Latest "Linux-Release.tar.xz" --repo="Geno-IDE/llvm"
+
+  macos_debug:
+    name: macOS-Debug
+    runs-on: [self-hosted, macOS]
+    needs: prepare_release
+    concurrency:
+      group: macos-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Xcode" -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake --build build --config Debug --parallel 4
+      # Archive all .a files and pass them through a xz filter
+    - name: Upload Archive
+      working-directory: build/Debug/lib
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        tar -cJvf "macOS-Debug.tar.xz" *.a
+        gh release upload Latest "macOS-Debug.tar.xz" --repo="Geno-IDE/llvm"
+
+  macos_release:
+    name: macOS-Release
+    runs-on: [self-hosted, macOS]
+    needs: prepare_release
+    concurrency:
+      group: macos-build
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+      # https://llvm.org/docs/CMake.html
+    - name: CMake
+      run: |
+        cmake -S llvm-project/llvm -B build -G "Xcode" -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake --build build --config Release --parallel 4
+      # Archive all .a files and pass them through a xz filter
+    - name: Upload Archive
+      working-directory: build/Release/lib
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        tar -cJvf "macOS-Release.tar.xz" *.a
+        gh release upload Latest "macOS-Release.tar.xz" --repo="Geno-IDE/llvm"
