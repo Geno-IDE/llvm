@@ -43,18 +43,26 @@ jobs:
       # https://llvm.org/docs/CMake.html
     - name: CMake
       run: |
-        cmake -S llvm-project/llvm -B build -G "Visual Studio 16" -A x64 -Thost=x64 -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON -DLLVM_USE_CRT_DEBUG=MT
+        cmake -S llvm-project/llvm -B build -G "Visual Studio 16" -A x64 -Thost=x64 -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=ON -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_USE_CRT_DEBUG=MT
         cmake --build build --config Debug --parallel 4
       # Archive all .lib files
-    - name: Archive
-      working-directory: build/Debug/lib
-      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -y "windows-debug.7z" "*.lib"
+    - name: Archive Libraries
+      working-directory: build/Debug
+      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -y "../../windows-debug.7z" "lib/*.lib"
+      # Archive generated LLVM includes
+    - name: Archive LLVM Includes
+      working-directory: build
+      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -r -y "../windows-debug.7z" "include/**.h" "include/**.inc" "include/**.def"
+      # Archive generated Clang includes
+    - name: Archive Clang Includes
+      working-directory: build/tools/clang
+      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -r -y "../../../windows-debug.7z" "include/**.h" "include/**.inc" "include/**.def"
       # Store archive as artifact for later (https://github.com/actions/upload-artifact)
     - name: Store Artifact
       uses: actions/upload-artifact@v2
       with:
         name: windows-debug
-        path: build/Debug/lib/windows-debug.7z
+        path: windows-debug.7z
         if-no-files-found: error
 
   windows_release:
@@ -71,12 +79,20 @@ jobs:
       # https://llvm.org/docs/CMake.html
     - name: CMake
       run: |
-        cmake -S llvm-project/llvm -B build -G "Visual Studio 16" -A x64 -Thost=x64 -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON -DLLVM_USE_CRT_RELEASE=MT
+        cmake -S llvm-project/llvm -B build -G "Visual Studio 16" -A x64 -Thost=x64 -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=ON -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_USE_CRT_RELEASE=MT
         cmake --build build --config Release --parallel 4
       # Archive all .lib files
-    - name: Archive
-      working-directory: build/Release/lib
-      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -y "windows-release.7z" "*.lib"
+    - name: Archive Libraries
+      working-directory: build/Release
+      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -y "../../windows-release.7z" "lib/*.lib"
+      # Archive generated LLVM includes
+    - name: Archive LLVM Includes
+      working-directory: build
+      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -r -y "../windows-release.7z" "include/**.h" "include/**.inc" "include/**.def"
+      # Archive generated Clang includes
+    - name: Archive Clang Includes
+      working-directory: build/tools/clang
+      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -r -y "../../../windows-release.7z" "include/**.h" "include/**.inc" "include/**.def"
       # Store archive as artifact for later (https://github.com/actions/upload-artifact)
     - name: Store Artifact
       uses: actions/upload-artifact@v2
@@ -99,12 +115,23 @@ jobs:
       # https://llvm.org/docs/CMake.html
     - name: CMake
       run: |
-        cmake -S llvm-project/llvm -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake -S llvm-project/llvm -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=ON -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
         cmake --build build --config Debug --parallel 4
       # Archive all .a files and pass them through a xz filter
-    - name: Archive
-      working-directory: build/lib
-      run: tar -cJvf "linux-debug.tar.xz" *.a
+    - name: Archive Libraries
+      working-directory: build
+      run: tar --verbose --create --wildcards --file="../linux-debug.tar" lib/*.a
+      # Archive generated LLVM includes
+    - name: Archive LLVM Includes
+      working-directory: build
+      run: tar --verbose --append --recursion --wildcards --wildcards-match-slash --file="../linux-debug.tar" include/*/*.h include/*/*.inc include/*/*.def
+      # Archive generated Clang includes
+    - name: Archive Clang Includes
+      working-directory: build/tools/clang
+      run: tar --verbose --append --recursion --wildcards --wildcards-match-slash --file="../../../linux-debug.tar" include/*/*.h include/*/*.inc include/*/*.def
+      # Compress archive
+    - name: Compress archive
+      run: tar --verbose --create --xz --file="linux-debug.tar.xz" linux-debug.tar
       # Store archive as artifact for later (https://github.com/actions/upload-artifact)
     - name: Store Artifact
       uses: actions/upload-artifact@v2
@@ -127,12 +154,23 @@ jobs:
       # https://llvm.org/docs/CMake.html
     - name: CMake
       run: |
-        cmake -S llvm-project/llvm -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake -S llvm-project/llvm -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=ON -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
         cmake --build build --config Release --parallel 4
       # Archive all .a files and pass them through a xz filter
-    - name: Archive
-      working-directory: build/lib
-      run: tar -cJvf "linux-release.tar.xz" *.a
+    - name: Archive Libraries
+      working-directory: build
+      run: tar --verbose --create --wildcards --file="../linux-release.tar" lib/*.a
+      # Archive generated LLVM includes
+    - name: Archive LLVM Includes
+      working-directory: build
+      run: tar --verbose --append --recursion --wildcards --wildcards-match-slash --file="../linux-release.tar" include/*/*.h include/*/*.inc include/*/*.def
+      # Archive generated Clang includes
+    - name: Archive Clang Includes
+      working-directory: build/tools/clang
+      run: tar --verbose --append --recursion --wildcards --wildcards-match-slash --file="../../../linux-release.tar" include/*/*.h include/*/*.inc include/*/*.def
+      # Compress archive
+    - name: Compress archive
+      run: tar --verbose --create --xz --file="linux-release.tar.xz" linux-release.tar
       # Store archive as artifact for later (https://github.com/actions/upload-artifact)
     - name: Store Artifact
       uses: actions/upload-artifact@v2
@@ -155,12 +193,23 @@ jobs:
       # https://llvm.org/docs/CMake.html
     - name: CMake
       run: |
-        cmake -S llvm-project/llvm -B build -G "Xcode" -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake -S llvm-project/llvm -B build -G "Xcode" -DCMAKE_BUILD_TYPE=Debug -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=ON -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
         cmake --build build --config Debug --parallel 4
       # Archive all .a files and pass them through a xz filter
-    - name: Archive
-      working-directory: build/Debug/lib
-      run: tar -cJvf "macos-debug.tar.xz" *.a
+    - name: Archive Libraries
+      working-directory: build/Debug
+      run: tar --verbose --create --wildcards --file="../../macos-debug.tar" lib/*.a
+      # Archive generated LLVM includes
+    - name: Archive LLVM Includes
+      working-directory: build
+      run: tar --verbose --append --recursion --wildcards --wildcards-match-slash --file="../macos-debug.tar" include/*/*.h include/*/*.inc include/*/*.def
+      # Archive generated Clang includes
+    - name: Archive Clang Includes
+      working-directory: build/tools/clang
+      run: tar --verbose --append --recursion --wildcards --wildcards-match-slash --file="../../../macos-debug.tar" include/*/*.h include/*/*.inc include/*/*.def
+      # Compress archive
+    - name: Compress archive
+      run: tar --verbose --create --xz --file="macos-debug.tar.xz" macos-debug.tar
       # Store archive as artifact for later (https://github.com/actions/upload-artifact)
     - name: Store Artifact
       uses: actions/upload-artifact@v2
@@ -183,12 +232,23 @@ jobs:
       # https://llvm.org/docs/CMake.html
     - name: CMake
       run: |
-        cmake -S llvm-project/llvm -B build -G "Xcode" -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+        cmake -S llvm-project/llvm -B build -G "Xcode" -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_TOOLS=OFF -DLLVM_CCACHE_BUILD=OFF -DLLVM_ENABLE_LIBPFM=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TOOLS=ON -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_STATIC_LINK_CXX_STDLIB=ON
         cmake --build build --config Release --parallel 4
       # Archive all .a files and pass them through a xz filter
-    - name: Archive
-      working-directory: build/Release/lib
-      run: tar -cJvf "macos-release.tar.xz" *.a
+    - name: Archive Libraries
+      working-directory: build/Release
+      run: tar --verbose --create --wildcards --file="../../macos-release.tar" lib/*.a
+      # Archive generated LLVM includes
+    - name: Archive LLVM Includes
+      working-directory: build
+      run: tar --verbose --append --recursion --wildcards --wildcards-match-slash --file="../macos-release.tar" include/*/*.h include/*/*.inc include/*/*.def
+      # Archive generated Clang includes
+    - name: Archive Clang Includes
+      working-directory: build/tools/clang
+      run: tar --verbose --append --recursion --wildcards --wildcards-match-slash --file="../../../macos-release.tar" include/*/*.h include/*/*.inc include/*/*.def
+      # Compress archive
+    - name: Compress archive
+      run: tar --verbose --create --xz --file="macos-release.tar.xz" macos-release.tar
       # Store archive as artifact for later (https://github.com/actions/upload-artifact)
     - name: Store Artifact
       uses: actions/upload-artifact@v2
@@ -210,6 +270,14 @@ jobs:
       uses: actions/download-artifact@v2
       with:
         path: artifacts
+      # Archive LLVM includes
+    - name: Archive LLVM Includes
+      working-directory: llvm-project/llvm
+      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -r -y "../../includes.zip" "include/**.h" "include/**.inc" "include/**.def"
+      # Archive Clang includes
+    - name: Archive Clang Includes
+      working-directory: llvm-project/clang
+      run: C:/"Program Files"/7-Zip/7z.exe a -mmt4 -mx9 -r -y "../../includes.zip" "include/**.h" "include/**.inc" "include/**.def"
       # Delete previous release (https://cli.github.com/manual/gh_release_delete)
     - name: Delete Latest Release
       continue-on-error: true
@@ -217,4 +285,4 @@ jobs:
       # Create new release (https://cli.github.com/manual/gh_release_create)
     - name: Create Latest Release
       working-directory: ${{ steps.download.outputs.download-path }}
-      run: gh release create Latest "windows-debug/windows-debug.7z" "windows-release/windows-release.7z" "linux-debug/linux-debug.tar.xz" "linux-release/linux-release.tar.xz" "macos-debug/macos-debug.tar.xz" "macos-release/macos-release.tar.xz" --title="Latest" --prerelease=false --draft=false --notes="" --repo="Geno-IDE/llvm"
+      run: gh release create Latest "includes.zip" "windows-debug/windows-debug.7z" "windows-release/windows-release.7z" "linux-debug/linux-debug.tar.xz" "linux-release/linux-release.tar.xz" "macos-debug/macos-debug.tar.xz" "macos-release/macos-release.tar.xz" --title="Latest" --prerelease=false --draft=false --notes="" --repo="Geno-IDE/llvm"
